@@ -1,13 +1,32 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { useGameState } from '@/hooks/useGameState';
+import { Lobby } from '@/components/game/Lobby';
+import { GameContainer } from '@/components/game/GameContainer';
+import { TileId, ChainName } from '@/types/game';
 
 const Index = () => {
+  const {
+    gameState,
+    startGame,
+    handleTilePlacement,
+    handleFoundChain,
+    handleBuyStocks,
+    handleSkipBuyStock,
+    resetGame,
+  } = useGameState();
+
+  if (!gameState) {
+    return <Lobby onStartGame={startGame} />;
+  }
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="mb-4 text-4xl font-bold">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
-      </div>
-    </div>
+    <GameContainer
+      gameState={gameState}
+      onTilePlacement={(tileId) => handleTilePlacement(tileId as TileId)}
+      onFoundChain={(chain) => handleFoundChain(chain as ChainName)}
+      onBuyStocks={(purchases) => handleBuyStocks(purchases as { chain: ChainName; quantity: number }[])}
+      onSkipBuyStock={handleSkipBuyStock}
+      onNewGame={resetGame}
+    />
   );
 };
 
