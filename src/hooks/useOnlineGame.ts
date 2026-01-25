@@ -7,35 +7,22 @@ import {
 } from '@/types/game';
 import {
   initializeGame,
-  placeTile,
-  foundChain,
-  growChain,
-  buyStocks,
-  endTurn,
   analyzeTilePlacement,
   getAvailableChainsForFoundation,
   checkGameEnd,
   calculateFinalScores,
 } from '@/utils/gameLogic';
 import {
-  analyzeMerger,
-  initializeMerger,
-  payMergerBonuses,
-  handleMergerStockDecision,
-  completeMerger,
-  getPlayersWithStock,
-} from '@/utils/mergerLogic';
-import {
   createRoom,
   joinRoom,
   leaveRoom,
   getRoomPlayers,
   getSecurePlayerData,
-  startGame as startOnlineGame,
-  updateGameState,
+  executeGameAction,
   dbToGameState,
   subscribeToRoom,
-  getSessionId,
+  getOrCreateAuthSession,
+  getCurrentUserId,
 } from '@/utils/multiplayerService';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
@@ -55,8 +42,6 @@ export const useOnlineGame = () => {
   const [maxPlayers, setMaxPlayers] = useState<number>(4);
   const [roomStatus, setRoomStatus] = useState<'waiting' | 'playing' | 'finished'>('waiting');
   const [isLoading, setIsLoading] = useState(false);
-
-  const sessionId = getSessionId();
 
   // Subscribe to room changes
   useEffect(() => {
@@ -145,9 +130,9 @@ export const useOnlineGame = () => {
         setMaxPlayers(room.max_players || 4);
         if (room.status === 'playing') {
           setRoomStatus('playing');
-          // Fetch game state
+          // Fetch game state from public view
           const { data: dbState } = await supabase
-            .from('game_states')
+            .from('game_states_public')
             .select('*')
             .eq('room_id', result.roomId!)
             .single();
@@ -189,171 +174,136 @@ export const useOnlineGame = () => {
 
     setIsLoading(true);
     try {
-      const playerNames = players.map(p => p.player_name);
-      const newGame = initializeGame(playerNames);
-      newGame.roomCode = roomCode;
-
-      const success = await startOnlineGame(roomId, newGame);
-      if (!success) {
-        toast({ title: 'Error', description: 'Failed to start game', variant: 'destructive' });
+      const result = await executeGameAction('start_game', roomId);
+      
+      if (!result.success) {
+        toast({ title: 'Error', description: result.error || 'Failed to start game', variant: 'destructive' });
         return;
       }
 
-      setGameState(newGame);
+      // Fetch the newly created game state
+      const { data: dbState } = await supabase
+        .from('game_states_public')
+        .select('*')
+        .eq('room_id', roomId)
+        .single();
+
+      if (dbState) {
+        const fullPlayers = await fetchFullPlayerData(roomId);
+        const fullState = dbToGameState(dbState, fullPlayers, roomCode);
+        setGameState(fullState);
+      }
+
       setRoomStatus('playing');
-      toast({ title: 'Game Started!', description: `${playerNames[0]}'s turn` });
+      toast({ title: 'Game Started!', description: `${players[0]?.player_name}'s turn` });
     } finally {
       setIsLoading(false);
     }
   }, [roomId, roomCode, players, maxPlayers]);
 
-  // Game action wrapper that syncs to database
-  const syncGameAction = useCallback(async (
-    action: (state: GameState) => GameState | null
-  ) => {
+  // Refresh game state from database
+  const refreshGameState = useCallback(async () => {
+    if (!roomId || !roomCode) return;
+    
+    const { data: dbState } = await supabase
+      .from('game_states_public')
+      .select('*')
+      .eq('room_id', roomId)
+      .single();
+
+    if (dbState) {
+      const fullPlayers = await fetchFullPlayerData(roomId);
+      const fullState = dbToGameState(dbState, fullPlayers, roomCode);
+      setGameState(fullState);
+    }
+  }, [roomId, roomCode]);
+
+  const handleTilePlacement = useCallback(async (tileId: TileId) => {
     if (!gameState || !roomId) return;
 
-    // Check if it's my turn (for most actions)
-    const isMyTurn = gameState.currentPlayerIndex === myPlayerIndex;
-    const isMergerStockPhase = gameState.phase === 'merger_handle_stock';
-    const isMyMergerTurn = isMergerStockPhase && 
-      gameState.merger?.currentPlayerIndex === myPlayerIndex;
-
-    if (!isMyTurn && !isMyMergerTurn) {
+    // Check if it's my turn
+    if (gameState.currentPlayerIndex !== myPlayerIndex) {
       toast({ title: 'Not Your Turn', variant: 'destructive' });
       return;
     }
 
-    const newState = action(gameState);
-    if (newState) {
-      setGameState(newState);
-      await updateGameState(roomId, newState);
+    // Client-side validation
+    const analysis = analyzeTilePlacement(gameState, tileId);
+    if (!analysis.valid) {
+      toast({ title: 'Invalid Move', description: analysis.reason, variant: 'destructive' });
+      return;
     }
-  }, [gameState, roomId, myPlayerIndex]);
 
-  const handleTilePlacement = useCallback((tileId: TileId) => {
-    syncGameAction((state) => {
-      const analysis = analyzeTilePlacement(state, tileId);
-      if (!analysis.valid) {
-        toast({ title: 'Invalid Move', description: analysis.reason, variant: 'destructive' });
-        return null;
-      }
+    const result = await executeGameAction('place_tile', roomId, { tileId });
+    
+    if (!result.success) {
+      toast({ title: 'Error', description: result.error, variant: 'destructive' });
+      return;
+    }
 
-      let newState = placeTile(state, tileId);
+    // Refresh state from server
+    await refreshGameState();
+  }, [gameState, roomId, myPlayerIndex, refreshGameState]);
 
-      if (analysis.action === 'form_chain') {
-        newState.phase = 'found_chain';
-        newState.pendingChainFoundation = [tileId, ...analysis.adjacentUnincorporated];
-        return newState;
-      }
+  const handleFoundChain = useCallback(async (chainName: ChainName) => {
+    if (!gameState || !roomId) return;
 
-      if (analysis.action === 'grow_chain') {
-        const chainToGrow = analysis.adjacentChains[0];
-        newState = growChain(newState, chainToGrow);
-        newState.gameLog = [
-          ...newState.gameLog,
-          {
-            timestamp: Date.now(),
-            playerId: newState.players[newState.currentPlayerIndex].id,
-            playerName: newState.players[newState.currentPlayerIndex].name,
-            action: `Extended ${chainToGrow}`,
-            details: `Chain now has ${newState.chains[chainToGrow].tiles.length} tiles`,
-          },
-        ];
-      }
+    if (gameState.currentPlayerIndex !== myPlayerIndex) {
+      toast({ title: 'Not Your Turn', variant: 'destructive' });
+      return;
+    }
 
-      if (analysis.action === 'merge_chains') {
-        const mergerAnalysis = analyzeMerger(newState, tileId, analysis.adjacentChains);
-        
-        if (!mergerAnalysis.canMerge) {
-          toast({ title: 'Invalid Merger', description: mergerAnalysis.reason, variant: 'destructive' });
-          return null;
-        }
+    const result = await executeGameAction('found_chain', roomId, { chainName });
+    
+    if (!result.success) {
+      toast({ title: 'Error', description: result.error, variant: 'destructive' });
+      return;
+    }
 
-        newState.mergerAdjacentChains = analysis.adjacentChains;
+    toast({ title: `${chainName} Founded!`, description: 'You received 1 bonus share.' });
+    await refreshGameState();
+  }, [gameState, roomId, myPlayerIndex, refreshGameState]);
 
-        if (mergerAnalysis.tieBreakerNeeded) {
-          newState.phase = 'merger_choose_survivor';
-          return newState;
-        } else {
-          const survivingChain = mergerAnalysis.potentialSurvivors[0];
-          newState.merger = initializeMerger(newState, analysis.adjacentChains, survivingChain);
-          newState.phase = 'merger_pay_bonuses';
-        }
-      }
+  const handleChooseMergerSurvivor = useCallback(async (survivingChain: ChainName) => {
+    if (!gameState || !roomId || !gameState.mergerAdjacentChains) return;
 
-      if (analysis.action === 'place_only') {
-        newState.phase = 'buy_stock';
-      }
+    if (gameState.currentPlayerIndex !== myPlayerIndex) {
+      toast({ title: 'Not Your Turn', variant: 'destructive' });
+      return;
+    }
 
-      if (checkGameEnd(newState)) {
-        newState.phase = 'game_over';
-        newState.winner = calculateFinalScores(newState)[0].name;
-      }
-
-      return newState;
+    const result = await executeGameAction('choose_merger_survivor', roomId, { 
+      survivingChain,
+      adjacentChains: gameState.mergerAdjacentChains 
     });
-  }, [syncGameAction]);
+    
+    if (!result.success) {
+      toast({ title: 'Error', description: result.error, variant: 'destructive' });
+      return;
+    }
 
-  const handleFoundChain = useCallback((chainName: ChainName) => {
-    syncGameAction((state) => {
-      const newState = foundChain(state, chainName);
-      if (checkGameEnd(newState)) {
-        newState.phase = 'game_over';
-        newState.winner = calculateFinalScores(newState)[0].name;
-      }
-      toast({ title: `${chainName} Founded!`, description: 'You received 1 bonus share.' });
-      return newState;
-    });
-  }, [syncGameAction]);
+    await refreshGameState();
+  }, [gameState, roomId, myPlayerIndex, refreshGameState]);
 
-  const handleChooseMergerSurvivor = useCallback((survivingChain: ChainName) => {
-    syncGameAction((state) => {
-      if (!state.mergerAdjacentChains) return null;
-      const newState = { ...state };
-      newState.merger = initializeMerger(newState, state.mergerAdjacentChains, survivingChain);
-      newState.phase = 'merger_pay_bonuses';
-      return newState;
-    });
-  }, [syncGameAction]);
+  const handlePayMergerBonuses = useCallback(async () => {
+    if (!gameState || !roomId || !gameState.merger?.currentDefunctChain) return;
 
-  const handlePayMergerBonuses = useCallback(() => {
-    syncGameAction((state) => {
-      if (!state.merger?.currentDefunctChain) return null;
+    if (gameState.currentPlayerIndex !== myPlayerIndex) {
+      toast({ title: 'Not Your Turn', variant: 'destructive' });
+      return;
+    }
 
-      let newState = payMergerBonuses(state, state.merger.currentDefunctChain);
-      newState.merger = { ...newState.merger!, bonusesPaid: true };
-      
-      const playersWithShares = getPlayersWithStock(newState, newState.merger.currentDefunctChain!);
-      
-      if (playersWithShares.length === 0) {
-        const currentDefunctIndex = newState.merger.defunctChains.indexOf(newState.merger.currentDefunctChain!);
-        if (currentDefunctIndex < newState.merger.defunctChains.length - 1) {
-          newState.merger.currentDefunctChain = newState.merger.defunctChains[currentDefunctIndex + 1];
-          newState.merger.bonusesPaid = false;
-        } else {
-          newState = completeMerger(newState);
-        }
-      } else {
-        newState.merger.currentPlayerIndex = state.currentPlayerIndex;
-        if (!playersWithShares.includes(newState.merger.currentPlayerIndex)) {
-          for (let i = 0; i < newState.players.length; i++) {
-            const idx = (state.currentPlayerIndex + i) % newState.players.length;
-            if (playersWithShares.includes(idx)) {
-              newState.merger.currentPlayerIndex = idx;
-              break;
-            }
-          }
-        }
-        newState.phase = 'merger_handle_stock';
-      }
+    const result = await executeGameAction('pay_merger_bonuses', roomId);
+    
+    if (!result.success) {
+      toast({ title: 'Error', description: result.error, variant: 'destructive' });
+      return;
+    }
 
-      return newState;
-    });
-  }, [syncGameAction]);
+    await refreshGameState();
+  }, [gameState, roomId, myPlayerIndex, refreshGameState]);
 
-  const handleMergerStockChoice = useCallback((decision: MergerStockDecision) => {
-    // Special handling - allow if it's this player's merger turn
+  const handleMergerStockChoice = useCallback(async (decision: MergerStockDecision) => {
     if (!gameState || !roomId || !gameState.merger) return;
 
     if (gameState.merger.currentPlayerIndex !== myPlayerIndex) {
@@ -361,131 +311,91 @@ export const useOnlineGame = () => {
       return;
     }
 
-    const processDecision = (state: GameState): GameState | null => {
-      let newState = handleMergerStockDecision(
-        state, 
-        state.merger!.currentPlayerIndex, 
-        decision
-      );
-      
-      const defunctChain = newState.merger!.currentDefunctChain!;
-      const startPlayerIndex = state.currentPlayerIndex;
-      let nextIndex = (newState.merger!.currentPlayerIndex + 1) % newState.players.length;
-      let foundNext = false;
-      
-      while (nextIndex !== startPlayerIndex) {
-        if (newState.players[nextIndex].stocks[defunctChain] > 0) {
-          newState.merger = { ...newState.merger!, currentPlayerIndex: nextIndex };
-          foundNext = true;
-          break;
-        }
-        nextIndex = (nextIndex + 1) % newState.players.length;
-      }
-      
-      if (!foundNext && newState.players[startPlayerIndex].stocks[defunctChain] > 0 && 
-          startPlayerIndex !== state.merger!.currentPlayerIndex) {
-        newState.merger = { ...newState.merger!, currentPlayerIndex: startPlayerIndex };
-        foundNext = true;
-      }
-
-      if (!foundNext) {
-        const currentDefunctIndex = newState.merger!.defunctChains.indexOf(defunctChain);
-        if (currentDefunctIndex < newState.merger!.defunctChains.length - 1) {
-          newState.merger = {
-            ...newState.merger!,
-            currentDefunctChain: newState.merger!.defunctChains[currentDefunctIndex + 1],
-            currentPlayerIndex: startPlayerIndex,
-            bonusesPaid: false,
-          };
-          newState.phase = 'merger_pay_bonuses';
-        } else {
-          newState = completeMerger(newState);
-        }
-      }
-
-      if (newState.phase === 'buy_stock' && checkGameEnd(newState)) {
-        newState.phase = 'game_over';
-        newState.winner = calculateFinalScores(newState)[0].name;
-      }
-
-      return newState;
-    };
-
-    const newState = processDecision(gameState);
-    if (newState) {
-      setGameState(newState);
-      updateGameState(roomId, newState);
+    const result = await executeGameAction('merger_stock_choice', roomId, { decision });
+    
+    if (!result.success) {
+      toast({ title: 'Error', description: result.error, variant: 'destructive' });
+      return;
     }
-  }, [gameState, roomId, myPlayerIndex]);
 
-  const handleBuyStocks = useCallback((purchases: { chain: ChainName; quantity: number }[]) => {
-    syncGameAction((state) => {
-      let newState = buyStocks(state, purchases);
-      newState = endTurn(newState);
-      
-      if (checkGameEnd(newState)) {
-        newState.phase = 'game_over';
-        newState.winner = calculateFinalScores(newState)[0].name;
-      }
+    await refreshGameState();
+  }, [gameState, roomId, myPlayerIndex, refreshGameState]);
 
-      toast({ title: 'Turn Complete', description: `${newState.players[newState.currentPlayerIndex].name}'s turn` });
-      return newState;
-    });
-  }, [syncGameAction]);
+  const handleBuyStocks = useCallback(async (purchases: { chain: ChainName; quantity: number }[]) => {
+    if (!gameState || !roomId) return;
 
-  const handleSkipBuyStock = useCallback(() => {
-    syncGameAction((state) => {
-      let newState = endTurn(state);
-      
-      if (checkGameEnd(newState)) {
-        newState.phase = 'game_over';
-        newState.winner = calculateFinalScores(newState)[0].name;
-      }
+    if (gameState.currentPlayerIndex !== myPlayerIndex) {
+      toast({ title: 'Not Your Turn', variant: 'destructive' });
+      return;
+    }
 
-      toast({ title: 'Turn Complete', description: `${newState.players[newState.currentPlayerIndex].name}'s turn` });
-      return newState;
-    });
-  }, [syncGameAction]);
+    const result = await executeGameAction('buy_stocks', roomId, { purchases });
+    
+    if (!result.success) {
+      toast({ title: 'Error', description: result.error, variant: 'destructive' });
+      return;
+    }
 
-  const handleEndGameVote = useCallback((vote: boolean) => {
-    if (!gameState || myPlayerIndex === null) return;
+    await refreshGameState();
+    
+    // Show next player's turn
+    const nextPlayerIndex = (gameState.currentPlayerIndex + 1) % gameState.players.length;
+    toast({ title: 'Turn Complete', description: `${gameState.players[nextPlayerIndex].name}'s turn` });
+  }, [gameState, roomId, myPlayerIndex, refreshGameState]);
+
+  const handleSkipBuyStock = useCallback(async () => {
+    if (!gameState || !roomId) return;
+
+    if (gameState.currentPlayerIndex !== myPlayerIndex) {
+      toast({ title: 'Not Your Turn', variant: 'destructive' });
+      return;
+    }
+
+    const result = await executeGameAction('skip_buy', roomId);
+    
+    if (!result.success) {
+      toast({ title: 'Error', description: result.error, variant: 'destructive' });
+      return;
+    }
+
+    await refreshGameState();
+    
+    const nextPlayerIndex = (gameState.currentPlayerIndex + 1) % gameState.players.length;
+    toast({ title: 'Turn Complete', description: `${gameState.players[nextPlayerIndex].name}'s turn` });
+  }, [gameState, roomId, myPlayerIndex, refreshGameState]);
+
+  const handleEndGameVote = useCallback(async (vote: boolean) => {
+    if (!gameState || !roomId || myPlayerIndex === null) return;
+
+    const result = await executeGameAction('end_game_vote', roomId, { vote });
+    
+    if (!result.success) {
+      toast({ title: 'Error', description: result.error, variant: 'destructive' });
+      return;
+    }
 
     const currentPlayer = gameState.players[myPlayerIndex];
+    const votesNeeded = Math.ceil(gameState.players.length / 2);
+    const currentVotes = gameState.endGameVotes.length + (vote ? 1 : 0);
     
-    if (vote && !gameState.endGameVotes.includes(currentPlayer.id)) {
-      const newVotes = [...gameState.endGameVotes, currentPlayer.id];
-      const votesNeeded = Math.ceil(gameState.players.length / 2);
-      
-      let newState = { ...gameState, endGameVotes: newVotes };
-      
-      if (newVotes.length >= votesNeeded) {
-        newState.phase = 'game_over';
-        newState.winner = calculateFinalScores(newState)[0].name;
-        toast({ title: 'Game Ended', description: 'Players voted to end the game' });
-      } else {
-        toast({ title: 'Vote Recorded', description: `${newVotes.length}/${votesNeeded} votes` });
-      }
-
-      setGameState(newState);
-      if (roomId) {
-        updateGameState(roomId, newState);
-      }
+    if (currentVotes >= votesNeeded) {
+      toast({ title: 'Game Ended', description: 'Players voted to end the game' });
+    } else {
+      toast({ title: 'Vote Recorded', description: `${currentVotes}/${votesNeeded} votes` });
     }
-  }, [gameState, myPlayerIndex, roomId]);
+
+    await refreshGameState();
+  }, [gameState, roomId, myPlayerIndex, refreshGameState]);
 
   const handleNewGame = useCallback(async () => {
     if (!roomId) return;
     
-    // Reset to lobby
-    await supabase
-      .from('game_rooms')
-      .update({ status: 'waiting' })
-      .eq('id', roomId);
-
-    await supabase
-      .from('game_states')
-      .delete()
-      .eq('room_id', roomId);
+    const result = await executeGameAction('new_game', roomId);
+    
+    if (!result.success) {
+      toast({ title: 'Error', description: result.error, variant: 'destructive' });
+      return;
+    }
 
     setGameState(null);
     setRoomStatus('waiting');

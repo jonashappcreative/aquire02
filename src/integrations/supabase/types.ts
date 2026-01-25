@@ -264,6 +264,68 @@ export type Database = {
           },
         ]
       }
+      game_states_public: {
+        Row: {
+          board: Json | null
+          chains: Json | null
+          current_player_index: number | null
+          end_game_votes: string[] | null
+          game_log: Json | null
+          id: string | null
+          last_placed_tile: string | null
+          merger: Json | null
+          pending_chain_foundation: string[] | null
+          phase: string | null
+          room_id: string | null
+          stock_bank: Json | null
+          stocks_purchased_this_turn: number | null
+          updated_at: string | null
+          winner: string | null
+        }
+        Insert: {
+          board?: Json | null
+          chains?: Json | null
+          current_player_index?: number | null
+          end_game_votes?: string[] | null
+          game_log?: Json | null
+          id?: string | null
+          last_placed_tile?: string | null
+          merger?: Json | null
+          pending_chain_foundation?: string[] | null
+          phase?: string | null
+          room_id?: string | null
+          stock_bank?: Json | null
+          stocks_purchased_this_turn?: number | null
+          updated_at?: string | null
+          winner?: string | null
+        }
+        Update: {
+          board?: Json | null
+          chains?: Json | null
+          current_player_index?: number | null
+          end_game_votes?: string[] | null
+          game_log?: Json | null
+          id?: string | null
+          last_placed_tile?: string | null
+          merger?: Json | null
+          pending_chain_foundation?: string[] | null
+          phase?: string | null
+          room_id?: string | null
+          stock_bank?: Json | null
+          stocks_purchased_this_turn?: number | null
+          updated_at?: string | null
+          winner?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "game_states_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: true
+            referencedRelation: "game_rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       cleanup_abandoned_rooms: { Args: never; Returns: undefined }
