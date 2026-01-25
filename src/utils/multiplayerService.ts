@@ -2,7 +2,32 @@ import { supabase } from '@/integrations/supabase/client';
 import { GameState, ChainName, TileId, TileState, PlayerState, ChainState } from '@/types/game';
 import type { Json } from '@/integrations/supabase/types';
 
-// Generate a unique session ID for this browser session
+// Get or create an authenticated session (anonymous or existing user)
+export const getOrCreateAuthSession = async (): Promise<string | null> => {
+  // First check if we already have a session
+  const { data: { user } } = await supabase.auth.getUser();
+  
+  if (user) {
+    return user.id;
+  }
+  
+  // Sign in anonymously if not authenticated
+  const { data, error } = await supabase.auth.signInAnonymously();
+  if (error) {
+    console.error('Failed to create anonymous session:', error);
+    return null;
+  }
+  
+  return data.user?.id ?? null;
+};
+
+// Get current user ID (must be authenticated first)
+export const getCurrentUserId = async (): Promise<string | null> => {
+  const { data: { user } } = await supabase.auth.getUser();
+  return user?.id ?? null;
+};
+
+// Legacy session ID for backward compatibility
 export const getSessionId = (): string => {
   let sessionId = sessionStorage.getItem('acquire_session_id');
   if (!sessionId) {
@@ -14,6 +39,13 @@ export const getSessionId = (): string => {
 
 // Create a new game room
 export const createRoom = async (maxPlayers: number = 4): Promise<{ roomCode: string; roomId: string; maxPlayers: number } | null> => {
+  // Ensure we're authenticated
+  const userId = await getOrCreateAuthSession();
+  if (!userId) {
+    console.error('Failed to authenticate');
+    return null;
+  }
+
   const roomCode = generateRoomCode();
   
   const { data, error } = await supabase
@@ -35,7 +67,13 @@ export const joinRoom = async (
   roomCode: string, 
   playerName: string
 ): Promise<{ success: boolean; roomId?: string; playerIndex?: number; maxPlayers?: number; error?: string }> => {
-  const sessionId = getSessionId();
+  // Ensure we're authenticated
+  const userId = await getOrCreateAuthSession();
+  if (!userId) {
+    return { success: false, error: 'Failed to authenticate' };
+  }
+
+  const sessionId = getSessionId(); // Keep for backward compatibility
   
   // Find the room
   const { data: room, error: roomError } = await supabase
@@ -54,9 +92,9 @@ export const joinRoom = async (
 
   const maxPlayers = room.max_players || 4;
 
-  // Check existing players
+  // Check existing players via the public view
   const { data: players, error: playersError } = await supabase
-    .from('game_players')
+    .from('game_players_public')
     .select('*')
     .eq('room_id', room.id)
     .order('player_index');
@@ -65,17 +103,23 @@ export const joinRoom = async (
     return { success: false, error: 'Error checking players' };
   }
 
-  // Check if this session already joined
-  const existingPlayer = players?.find(p => p.session_id === sessionId);
-  if (existingPlayer) {
-    return { success: true, roomId: room.id, playerIndex: existingPlayer.player_index, maxPlayers };
+  // Check if this user already joined (check our own record)
+  const { data: myPlayer } = await supabase
+    .from('game_players')
+    .select('*')
+    .eq('room_id', room.id)
+    .eq('user_id', userId)
+    .single();
+
+  if (myPlayer) {
+    return { success: true, roomId: room.id, playerIndex: myPlayer.player_index, maxPlayers };
   }
 
   if (players && players.length >= maxPlayers) {
     return { success: false, error: 'Room is full' };
   }
 
-  // Add player
+  // Add player with user_id for authentication
   const playerIndex = players?.length || 0;
   const { error: insertError } = await supabase
     .from('game_players')
@@ -83,7 +127,8 @@ export const joinRoom = async (
       room_id: room.id,
       player_name: playerName,
       player_index: playerIndex,
-      session_id: sessionId,
+      user_id: userId,
+      session_id: sessionId, // Keep for backward compatibility
     });
 
   if (insertError) {
@@ -96,13 +141,14 @@ export const joinRoom = async (
 
 // Leave a room
 export const leaveRoom = async (roomId: string): Promise<void> => {
-  const sessionId = getSessionId();
+  const userId = await getCurrentUserId();
+  if (!userId) return;
   
   await supabase
     .from('game_players')
     .delete()
     .eq('room_id', roomId)
-    .eq('session_id', sessionId);
+    .eq('user_id', userId);
 };
 
 // Get room players (public info only - excludes tiles for security)
@@ -118,13 +164,17 @@ export const getRoomPlayers = async (roomId: string): Promise<{ id: string; play
     return [];
   }
 
-  return data || [];
+  return (data || []).map(p => ({
+    id: p.id || '',
+    player_name: p.player_name || '',
+    player_index: p.player_index ?? 0
+  }));
 };
 
 // Get player data with secure tile handling
 // Only returns tiles for the current session's player, others get empty arrays
 export const getSecurePlayerData = async (roomId: string): Promise<any[]> => {
-  const sessionId = getSessionId();
+  const userId = await getCurrentUserId();
   
   // Fetch public player data (excludes tiles and session_id for security)
   const { data: publicData, error: publicError } = await supabase
@@ -138,131 +188,56 @@ export const getSecurePlayerData = async (roomId: string): Promise<any[]> => {
     return [];
   }
 
-  // Fetch own player data separately using session_id (not exposed publicly)
+  // Fetch own player data separately using user_id
   const { data: myPlayer, error: myPlayerError } = await supabase
     .from('game_players')
     .select('player_index, tiles')
     .eq('room_id', roomId)
-    .eq('session_id', sessionId)
+    .eq('user_id', userId)
     .single();
 
   const myPlayerIndex = myPlayer?.player_index ?? -1;
   const myTiles: string[] = myPlayer?.tiles || [];
 
-  // Return players with tiles only for the session owner
+  // Return players with tiles only for the authenticated user
   return publicData.map((p) => ({
     ...p,
     tiles: p.player_index === myPlayerIndex ? myTiles : []
   }));
 };
 
-// Start the game
-export const startGame = async (roomId: string, gameState: GameState): Promise<boolean> => {
-  // Serialize board Map to object
-  const boardObj: Record<string, TileState> = {};
-  gameState.board.forEach((value, key) => {
-    boardObj[key] = value;
+// Execute a game action via the edge function
+export const executeGameAction = async (
+  action: string,
+  roomId: string,
+  payload?: any
+): Promise<{ success: boolean; error?: string; data?: any }> => {
+  const { data, error } = await supabase.functions.invoke('game-action', {
+    body: { action, roomId, payload }
   });
 
-  // Update room status
-  const { error: roomError } = await supabase
-    .from('game_rooms')
-    .update({ status: 'playing' })
-    .eq('id', roomId);
-
-  if (roomError) {
-    console.error('Error updating room status:', roomError);
-    return false;
+  if (error) {
+    console.error('Game action error:', error);
+    return { success: false, error: error.message };
   }
 
-  // Create game state
-  const { error: stateError } = await supabase
-    .from('game_states')
-    .insert({
-      room_id: roomId,
-      current_player_index: gameState.currentPlayerIndex,
-      phase: gameState.phase,
-      board: boardObj as unknown as Json,
-      chains: gameState.chains as unknown as Json,
-      stock_bank: gameState.stockBank as unknown as Json,
-      tile_bag: gameState.tileBag,
-      last_placed_tile: gameState.lastPlacedTile,
-      pending_chain_foundation: gameState.pendingChainFoundation,
-      merger: gameState.merger as unknown as Json,
-      stocks_purchased_this_turn: gameState.stocksPurchasedThisTurn,
-      game_log: gameState.gameLog as unknown as Json,
-      winner: gameState.winner,
-      end_game_votes: gameState.endGameVotes,
-    });
-
-  if (stateError) {
-    console.error('Error creating game state:', stateError);
-    return false;
+  if (data?.error) {
+    return { success: false, error: data.error };
   }
 
-  // Update player data
-  for (const player of gameState.players) {
-    const playerIndex = parseInt(player.id.split('-')[1]);
-    await supabase
-      .from('game_players')
-      .update({
-        cash: player.cash,
-        tiles: player.tiles,
-        stocks: player.stocks,
-      })
-      .eq('room_id', roomId)
-      .eq('player_index', playerIndex);
-  }
-
-  return true;
+  return data || { success: true };
 };
 
-// Update game state in database
+// Start the game via edge function
+export const startGame = async (roomId: string, gameState: GameState): Promise<boolean> => {
+  const result = await executeGameAction('start_game', roomId);
+  return result.success;
+};
+
+// Update game state via edge function (for actions that need state update)
 export const updateGameState = async (roomId: string, gameState: GameState): Promise<boolean> => {
-  // Serialize board Map to object
-  const boardObj: Record<string, TileState> = {};
-  gameState.board.forEach((value, key) => {
-    boardObj[key] = value;
-  });
-
-  const { error: stateError } = await supabase
-    .from('game_states')
-    .update({
-      current_player_index: gameState.currentPlayerIndex,
-      phase: gameState.phase,
-      board: boardObj as unknown as Json,
-      chains: gameState.chains as unknown as Json,
-      stock_bank: gameState.stockBank as unknown as Json,
-      tile_bag: gameState.tileBag,
-      last_placed_tile: gameState.lastPlacedTile,
-      pending_chain_foundation: gameState.pendingChainFoundation,
-      merger: gameState.merger as unknown as Json,
-      stocks_purchased_this_turn: gameState.stocksPurchasedThisTurn,
-      game_log: gameState.gameLog as unknown as Json,
-      winner: gameState.winner,
-      end_game_votes: gameState.endGameVotes,
-    })
-    .eq('room_id', roomId);
-
-  if (stateError) {
-    console.error('Error updating game state:', stateError);
-    return false;
-  }
-
-  // Update player data
-  for (const player of gameState.players) {
-    const playerIndex = parseInt(player.id.split('-')[1]);
-    await supabase
-      .from('game_players')
-      .update({
-        cash: player.cash,
-        tiles: player.tiles,
-        stocks: player.stocks,
-      })
-      .eq('room_id', roomId)
-      .eq('player_index', playerIndex);
-  }
-
+  // This is now handled by the edge function for each specific action
+  // Kept for compatibility but the edge function handles updates
   return true;
 };
 
@@ -340,7 +315,7 @@ export const subscribeToRoom = (
       {
         event: '*',
         schema: 'public',
-        table: 'game_states',
+        table: 'game_states_public',
         filter: `room_id=eq.${roomId}`,
       },
       (payload) => {

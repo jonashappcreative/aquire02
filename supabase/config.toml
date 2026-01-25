@@ -1,1 +1,4 @@
 project_id = "bkpjepbefcpmyczbtnot"
+
+[functions.game-action]
+verify_jwt = false
