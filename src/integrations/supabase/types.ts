@@ -201,7 +201,7 @@ export type Database = {
       }
     }
     Functions: {
-      [_ in never]: never
+      cleanup_abandoned_rooms: { Args: never; Returns: undefined }
     }
     Enums: {
       [_ in never]: never
