@@ -129,18 +129,7 @@ export const GameContainer = ({
         onClose={() => {}}
       />
 
-      {/* Waiting for other player overlay (online mode only) */}
-      {isOnlineMode && !isMyTurn && gameState.phase !== 'game_over' && !isMyMergerTurn && (
-        <div className="fixed inset-0 bg-background/60 backdrop-blur-sm z-40 flex items-center justify-center">
-          <div className="bg-card rounded-xl p-6 shadow-xl border text-center">
-            <Clock className="w-8 h-8 text-primary mx-auto mb-3 animate-pulse" />
-            <p className="text-lg font-semibold">Waiting for {currentPlayer.name}...</p>
-            <p className="text-sm text-muted-foreground mt-1">
-              It's their turn to play
-            </p>
-          </div>
-        </div>
-      )}
+      {/* Waiting overlay removed - now shown in sidebar notification */}
 
       {/* Game Over Modal */}
       {gameState.phase === 'game_over' && showGameOver && (
@@ -192,26 +181,15 @@ export const GameContainer = ({
 
             {/* Action Area */}
             <div className="grid md:grid-cols-2 gap-4">
-            {/* Player's Hand - only show your own tiles */}
-            {(!isOnlineMode || isMyTurn) && (
-              <PlayerHand
-                tiles={myPlayer.tiles}
-                gameState={gameState}
-                isCurrentPlayer={isMyTurn}
-                canPlace={gameState.phase === 'place_tile' && isMyTurn}
-                onTileClick={handleTileSelect}
-                selectedTile={selectedTile}
-              />
-            )}
-            
-            {/* Waiting message when not your turn */}
-            {isOnlineMode && !isMyTurn && gameState.phase === 'place_tile' && (
-              <div className="bg-card rounded-xl p-4 shadow-md flex items-center justify-center">
-                <p className="text-sm text-muted-foreground">
-                  Your tiles are hidden while waiting
-                </p>
-              </div>
-            )}
+            {/* Player's Hand - always visible in online mode */}
+            <PlayerHand
+              tiles={myPlayer.tiles}
+              gameState={gameState}
+              isCurrentPlayer={isMyTurn}
+              canPlace={gameState.phase === 'place_tile' && isMyTurn}
+              onTileClick={handleTileSelect}
+              selectedTile={selectedTile}
+            />
 
               {/* Current Action */}
               <div>
@@ -313,6 +291,23 @@ export const GameContainer = ({
             <div className="lg:hidden">
               <GameLog entries={gameState.gameLog} />
             </div>
+
+            {/* Turn Status Notification - Mobile */}
+            {isOnlineMode && !isMyTurn && gameState.phase !== 'game_over' && !isMyMergerTurn && (
+              <div className="lg:hidden mt-4">
+                <div className="bg-card rounded-xl p-4 shadow-md border border-primary/20">
+                  <div className="flex items-center gap-3">
+                    <Clock className="w-5 h-5 text-primary animate-pulse flex-shrink-0" />
+                    <div>
+                      <p className="font-semibold text-sm">Waiting for {currentPlayer.name}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        It's their turn to play
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Right Column - Players and Log */}
@@ -335,6 +330,23 @@ export const GameContainer = ({
             <div className="hidden lg:block">
               <GameLog entries={gameState.gameLog} />
             </div>
+
+            {/* Turn Status Notification - Desktop */}
+            {isOnlineMode && !isMyTurn && gameState.phase !== 'game_over' && !isMyMergerTurn && (
+              <div className="hidden lg:block mt-4">
+                <div className="bg-card rounded-xl p-4 shadow-md border border-primary/20">
+                  <div className="flex items-center gap-3">
+                    <Clock className="w-5 h-5 text-primary animate-pulse flex-shrink-0" />
+                    <div>
+                      <p className="font-semibold text-sm">Waiting for {currentPlayer.name}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        It's their turn to play
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
