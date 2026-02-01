@@ -1,8 +1,10 @@
-# Welcome to your Lovable project
+# Acquire - Online Board Game
 
-## Project info
+A digital implementation of the classic Acquire board game with real-time multiplayer support.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Project Overview
+
+Acquire is a strategic hotel chain building game where players place tiles, found hotel chains, buy stocks, and merge companies to accumulate wealth. This implementation features both local (hot-seat) and online multiplayer modes with real-time synchronization.
 
 ## How can I edit this code?
 
@@ -60,14 +62,58 @@ This project is built with:
 - shadcn-ui
 - Tailwind CSS
 
-## How can I deploy this project?
+## Features
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+- **Local Multiplayer**: Play on one device with up to 4 players
+- **Online Multiplayer**: Real-time gameplay with friends on separate devices
+- **Tile Discard System**: Automatic handling of unplayable tiles
+- **Real-time Sync**: Powered by Supabase Realtime
+- **Authentication**: User accounts and session management
+- **Modern UI**: Built with shadcn/ui and Tailwind CSS
 
-## Can I connect a custom domain to my Lovable project?
+## Tech Stack
 
-Yes, you can!
+- **Frontend**: React 18, TypeScript, Vite
+- **Styling**: Tailwind CSS, shadcn/ui components
+- **Backend**: Supabase (PostgreSQL, Realtime, Auth, Edge Functions)
+- **Deployment**: Netlify (Frontend), Supabase (Backend)
+- **State Management**: React hooks, TanStack Query
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+## Deployment
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+### Quick Deploy to Netlify
+
+[![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy)
+
+### Manual Deployment
+
+See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed deployment instructions.
+
+**Quick Start:**
+
+1. **Deploy Frontend to Netlify**
+   - Connect your GitHub repository to Netlify
+   - Configure environment variables (see `.env.example`)
+   - Build command: `npm run build`
+   - Publish directory: `dist`
+
+2. **Deploy Backend to Supabase**
+   ```bash
+   supabase functions deploy game-action
+   ```
+
+3. **Configure Environment Variables**
+   - `VITE_SUPABASE_URL`
+   - `VITE_SUPABASE_PUBLISHABLE_KEY`
+   - `VITE_SUPABASE_PROJECT_ID`
+
+For a complete deployment checklist, see [NETLIFY_CHECKLIST.md](./NETLIFY_CHECKLIST.md)
+
+## Custom Domain
+
+You can connect a custom domain to your Netlify deployment:
+
+1. Go to Site settings → Domain management in Netlify
+2. Click "Add custom domain"
+3. Follow the DNS configuration instructions
+4. Update CORS settings in Supabase with your custom domain
