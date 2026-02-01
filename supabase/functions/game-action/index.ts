@@ -16,9 +16,9 @@ interface MergerStockDecision {
 }
 
 interface GameActionRequest {
-  action: 'start_game' | 'place_tile' | 'found_chain' | 'choose_merger_survivor' | 
+  action: 'start_game' | 'place_tile' | 'found_chain' | 'choose_merger_survivor' |
           'pay_merger_bonuses' | 'merger_stock_choice' | 'buy_stocks' | 'skip_buy' |
-          'end_game_vote' | 'new_game' | 'update_room_status';
+          'discard_tile' | 'end_game_vote' | 'new_game' | 'update_room_status';
   roomId: string;
   payload?: any;
 }
@@ -1145,6 +1145,80 @@ Deno.serve(async (req) => {
             winner,
           })
           .eq('room_id', roomId);
+
+        result = { success: true };
+        break;
+      }
+
+      case 'discard_tile': {
+        const { tileId } = payload as { tileId: string };
+
+        if (!tileId) {
+          return new Response(
+            JSON.stringify({ success: false, error: 'Missing tileId' }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        if (!gameState) {
+          return new Response(
+            JSON.stringify({ success: false, error: 'Game not started' }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // Get current player
+        const currentPlayer = allPlayers.find((p: any) => p.player_index === gameState.current_player_index);
+        if (!currentPlayer) {
+          return new Response(
+            JSON.stringify({ success: false, error: 'Player not found' }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // Validate tile is in player's hand
+        if (!currentPlayer.tiles.includes(tileId)) {
+          return new Response(
+            JSON.stringify({ success: false, error: 'Tile not in hand' }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // Remove tile from player's hand
+        const updatedTiles = currentPlayer.tiles.filter((t: string) => t !== tileId);
+
+        // Add tile back to bag at random position
+        const tileBag = [...gameState.tile_bag];
+        const randomIndex = Math.floor(Math.random() * (tileBag.length + 1));
+        tileBag.splice(randomIndex, 0, tileId);
+
+        // Draw new tile
+        if (tileBag.length === 0) {
+          return new Response(
+            JSON.stringify({ success: false, error: 'Tile bag is empty' }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const drawnTile = tileBag.pop()!;
+        const finalTiles = [...updatedTiles, drawnTile];
+
+        // Update player tiles in database
+        const { error: updatePlayerError } = await adminClient
+          .from('game_players')
+          .update({ tiles: finalTiles })
+          .eq('room_id', roomId)
+          .eq('player_index', gameState.current_player_index);
+
+        if (updatePlayerError) throw updatePlayerError;
+
+        // Update tile bag in game state
+        const { error: updateStateError } = await adminClient
+          .from('game_states')
+          .update({ tile_bag: tileBag })
+          .eq('room_id', roomId);
+
+        if (updateStateError) throw updateStateError;
 
         result = { success: true };
         break;

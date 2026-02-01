@@ -385,6 +385,46 @@ export const useOnlineGame = () => {
     toast({ title: 'Turn Complete', description: `${gameState.players[nextPlayerIndex].name}'s turn` });
   }, [gameState, roomId, myPlayerIndex, refreshGameState]);
 
+  const handleDiscardTile = useCallback(async (tileId: TileId) => {
+    if (!gameState || !roomId) return;
+
+    if (gameState.currentPlayerIndex !== myPlayerIndex) {
+      toast({
+        title: 'Not Your Turn',
+        description: 'You can only discard tiles during your turn',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    console.log('[useOnlineGame] Discarding tile:', tileId);
+
+    try {
+      const result = await executeGameAction('discard_tile', roomId, { tileId });
+
+      if (!result.success) {
+        toast({
+          title: 'Error Discarding Tile',
+          description: result.error || 'Failed to discard tile',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      // Refresh game state to get updated tile hand
+      await refreshGameState();
+
+      console.log('[useOnlineGame] Tile discarded successfully');
+    } catch (error) {
+      console.error('[useOnlineGame] Error discarding tile:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to discard tile',
+        variant: 'destructive',
+      });
+    }
+  }, [gameState, roomId, myPlayerIndex, refreshGameState]);
+
   const handleEndGameVote = useCallback(async (vote: boolean) => {
     if (!gameState || !roomId || myPlayerIndex === null) return;
 
@@ -442,6 +482,7 @@ export const useOnlineGame = () => {
     
     // Game actions
     handleTilePlacement,
+    handleDiscardTile,
     handleFoundChain,
     handleChooseMergerSurvivor,
     handlePayMergerBonuses,

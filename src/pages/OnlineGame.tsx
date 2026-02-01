@@ -17,6 +17,7 @@ const OnlineGame = () => {
     handleLeaveRoom,
     handleStartGame,
     handleTilePlacement,
+    handleDiscardTile,
     handleFoundChain,
     handleChooseMergerSurvivor,
     handlePayMergerBonuses,
@@ -49,6 +50,7 @@ const OnlineGame = () => {
       gameState={gameState}
       myPlayerIndex={myPlayerIndex ?? undefined}
       onTilePlacement={(tileId) => handleTilePlacement(tileId as TileId)}
+      onDiscardTile={(tileId) => handleDiscardTile(tileId as TileId)}
       onFoundChain={(chain) => handleFoundChain(chain as ChainName)}
       onChooseMergerSurvivor={handleChooseMergerSurvivor}
       onPayMergerBonuses={handlePayMergerBonuses}

@@ -20,6 +20,7 @@ const Index = () => {
     gameState,
     startGame,
     handleTilePlacement,
+    handleDiscardTile,
     handleFoundChain,
     handleChooseMergerSurvivor,
     handlePayMergerBonuses,
@@ -152,6 +153,7 @@ const Index = () => {
     <GameContainer
       gameState={gameState}
       onTilePlacement={(tileId) => handleTilePlacement(tileId as TileId)}
+      onDiscardTile={(tileId) => handleDiscardTile(tileId as TileId)}
       onFoundChain={(chain) => handleFoundChain(chain as ChainName)}
       onChooseMergerSurvivor={handleChooseMergerSurvivor}
       onPayMergerBonuses={handlePayMergerBonuses}

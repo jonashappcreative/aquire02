@@ -476,6 +476,47 @@ export const drawTile = (state: GameState): GameState => {
   return newState;
 };
 
+// Discard a tile and draw a new one
+export const discardTile = (state: GameState, tileId: TileId): GameState => {
+  const playerIndex = state.currentPlayerIndex;
+  const currentPlayer = state.players[playerIndex];
+
+  // Validate tile is in player's hand
+  if (!currentPlayer.tiles.includes(tileId)) {
+    return state;
+  }
+
+  // Remove tile from player's hand
+  const updatedTiles = currentPlayer.tiles.filter(t => t !== tileId);
+
+  // Add tile back to tile bag (at a random position to shuffle)
+  const newTileBag = [...state.tileBag];
+  const randomIndex = Math.floor(Math.random() * (newTileBag.length + 1));
+  newTileBag.splice(randomIndex, 0, tileId);
+
+  // Draw new tile from bag
+  if (newTileBag.length === 0) {
+    // Edge case: bag is empty (shouldn't happen in normal game)
+    return { ...state, players: [...state.players], tileBag: newTileBag };
+  }
+
+  const drawnTile = newTileBag.pop()!;
+  const finalTiles = [...updatedTiles, drawnTile];
+
+  // Update game state
+  const newPlayers = [...state.players];
+  newPlayers[playerIndex] = {
+    ...currentPlayer,
+    tiles: finalTiles,
+  };
+
+  return {
+    ...state,
+    players: newPlayers,
+    tileBag: newTileBag,
+  };
+};
+
 // End turn and advance to next player
 export const endTurn = (state: GameState): GameState => {
   const newState = drawTile(state);

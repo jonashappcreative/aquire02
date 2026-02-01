@@ -16,6 +16,8 @@ import {
   getAvailableChainsForFoundation,
   checkGameEnd,
   calculateFinalScores,
+  discardTile,
+  hasPlayableTiles,
 } from '@/utils/gameLogic';
 import {
   analyzeMerger,
@@ -133,6 +135,25 @@ export const useGameState = () => {
     }
 
     setGameState(newState);
+  }, [gameState]);
+
+  const handleDiscardTile = useCallback((tileId: TileId) => {
+    if (!gameState) return;
+
+    console.log('[useGameState] Discarding tile:', tileId);
+
+    // Apply discard logic
+    const newState = discardTile(gameState, tileId);
+    setGameState(newState);
+
+    // Check if new tile is playable
+    const stillNoPlayableTiles = !hasPlayableTiles(newState, newState.currentPlayerIndex);
+
+    if (stillNoPlayableTiles) {
+      console.log('[useGameState] Still no playable tiles, modal will stay open');
+    } else {
+      console.log('[useGameState] Playable tile drawn, modal will close');
+    }
   }, [gameState]);
 
   const handleFoundChain = useCallback((chainName: ChainName) => {
@@ -350,6 +371,7 @@ export const useGameState = () => {
     currentPlayerIndex,
     startGame,
     handleTilePlacement,
+    handleDiscardTile,
     handleFoundChain,
     handleChooseMergerSurvivor,
     handlePayMergerBonuses,
