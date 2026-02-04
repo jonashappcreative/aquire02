@@ -21,8 +21,6 @@
   from = "/*"
   to = "/index.html"
   status = 200
-  # Force rewrite so all paths serve index.html (SPA routing)
-  force = true
 
 # Headers for security and performance
 [[headers]]
