@@ -74,12 +74,18 @@ const TutorialPage: React.FC = () => {
   };
 
   const handleBoardTileClick = (tileId: TileId) => {
-    if (selectedTile === tileId) {
-      const isValid = validateAction('place_tile', tileId);
-      if (isValid) {
-        setSelectedTile(null);
-        if (currentStep === 7) {
-          setTimeout(() => setShowChainSelector(true), 500);
+    const stepConfig = tutorialSteps.find(s => s.id === currentStep);
+    
+    // For tile placement steps, a single click on the correct board tile should work
+    if (stepConfig?.interactiveType === 'place_tile') {
+      const expectedTile = stepConfig.expectedAction?.value;
+      if (tileId === expectedTile) {
+        const isValid = validateAction('place_tile', tileId);
+        if (isValid) {
+          setSelectedTile(null);
+          if (currentStep === 7) {
+            setTimeout(() => setShowChainSelector(true), 500);
+          }
         }
       }
     }
