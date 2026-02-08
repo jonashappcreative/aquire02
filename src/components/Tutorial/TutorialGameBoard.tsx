@@ -59,30 +59,36 @@ export const TutorialGameBoard: React.FC<TutorialGameBoardProps> = ({
               const chainName = tile?.chain;
               const isHighlighted = highlightedTile === tileId;
 
+              // Determine if this tile should be clickable
+              const isClickable = isInHand || isHighlighted;
+              
               return (
                 <button
                   key={tileId}
-                  onClick={() => {
-                    // Allow clicking on playable tiles (in hand) OR clicking directly on the board location
-                    if (isInHand || highlightedTile === tileId) {
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (isClickable) {
                       onTileClick?.(tileId);
                     }
                   }}
-                  disabled={!isInHand && highlightedTile !== tileId}
+                  disabled={!isClickable}
                   className={cn(
-                    "tile flex-1 aspect-[4/3] min-h-[28px] md:min-h-[36px] text-[10px] md:text-xs font-mono",
+                    "tile flex-1 aspect-[4/3] min-h-[28px] md:min-h-[36px] text-[10px] md:text-xs font-mono relative",
                     isPlaced && !chainName && "tile-placed",
                     chainName && `tile-chain ${getChainClass(chainName)}`,
                     isInHand && "tile-playable cursor-pointer",
-                    isHighlighted && "ring-2 ring-primary scale-105 animate-pulse",
-                    !isInHand && !isPlaced && "opacity-50"
+                    isHighlighted && !isPlaced && "ring-2 ring-primary scale-105 animate-pulse cursor-pointer bg-primary/20",
+                    !isClickable && !isPlaced && "opacity-50"
                   )}
+                  style={{ pointerEvents: isClickable ? 'auto' : 'none' }}
                   title={tileId}
                 >
-                  {(isPlaced || isInHand) && (
+                  {/* Show tile ID for placed tiles, tiles in hand, OR highlighted tiles */}
+                  {(isPlaced || isInHand || isHighlighted) && (
                     <span className={cn(
                       "font-semibold",
-                      chainName === 'tower' ? "text-background" : "text-foreground"
+                      chainName === 'tower' ? "text-background" : "text-foreground",
+                      isHighlighted && !isPlaced && "text-primary font-bold"
                     )}>
                       {tileId}
                     </span>
