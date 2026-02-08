@@ -42,3 +42,6 @@ netlify-debug.log
 
 # Notes
 notes/
+
+# Vite temp files
+vite.config.ts.timestamp-*
