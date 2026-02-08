@@ -100,6 +100,7 @@ const Index = () => {
               <CardTitle className="text-xl">Choose Game Mode</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* Local Play Button - Commented out for tutorial branch
               <Button
                 variant="outline"
                 className="w-full h-20 flex flex-col items-center justify-center gap-2"
@@ -113,6 +114,7 @@ const Index = () => {
                   Play on one device, passing it around
                 </span>
               </Button>
+              */}
 
               <Button
                 className="w-full h-20 flex flex-col items-center justify-center gap-2"
@@ -126,18 +128,38 @@ const Index = () => {
                   Play with friends on separate devices
                 </span>
               </Button>
+
+              <Button
+                variant="outline"
+                className="w-full h-20 flex flex-col items-center justify-center gap-2"
+                onClick={() => navigate('/tutorial')}
+              >
+                <div className="flex items-center gap-2">
+                  <Monitor className="w-5 h-5" />
+                  <span className="text-lg font-semibold">Tutorial</span>
+                </div>
+                <span className="text-xs text-muted-foreground">
+                  Learn how to play the game
+                </span>
+              </Button>
             </CardContent>
           </Card>
 
           {/* Game Info */}
           <div className="mt-6 p-4 rounded-xl bg-muted/30 border border-border/50">
             <h3 className="font-medium mb-2 text-sm">How to Play</h3>
-            <ul className="text-xs text-muted-foreground space-y-1">
-              <li>• Place tiles to form hotel chains</li>
-              <li>• Buy stocks in chains you believe will grow</li>
-              <li>• Merge chains to earn bonuses</li>
-              <li>• End with the most cash to win!</li>
-            </ul>
+            <p className="text-xs text-muted-foreground mb-3">
+              Build a hotel empire by placing tiles, founding chains, and trading stocks. 
+              Merge rival chains for big bonuses and finish with the most wealth to win!
+            </p>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full text-xs"
+              onClick={() => navigate('/tutorial')}
+            >
+              Tutorial
+            </Button>
           </div>
         </div>
       </div>

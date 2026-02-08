@@ -39,3 +39,9 @@ lerna-debug.log*
 # Netlify
 .netlify/
 netlify-debug.log
+
+# Notes
+notes/
+
+# Vite temp files
+vite.config.ts.timestamp-*
