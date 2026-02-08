@@ -32,6 +32,7 @@ interface OnlinePlayer {
   id: string;
   player_name: string;
   player_index: number;
+  is_ready: boolean;
 }
 
 export const useOnlineGame = () => {
