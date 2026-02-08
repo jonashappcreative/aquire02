@@ -197,10 +197,10 @@ export const leaveRoom = async (roomId: string): Promise<void> => {
 };
 
 // Get room players (public info only - excludes tiles for security)
-export const getRoomPlayers = async (roomId: string): Promise<{ id: string; player_name: string; player_index: number; is_ready: boolean }[]> => {
+export const getRoomPlayers = async (roomId: string): Promise<{ id: string; player_name: string; player_index: number }[]> => {
   const { data, error } = await supabase
     .from('game_players_public')
-    .select('id, player_name, player_index, is_ready')
+    .select('id, player_name, player_index')
     .eq('room_id', roomId)
     .order('player_index');
 
@@ -213,7 +213,6 @@ export const getRoomPlayers = async (roomId: string): Promise<{ id: string; play
     id: p.id || '',
     player_name: p.player_name || '',
     player_index: p.player_index ?? 0,
-    is_ready: p.is_ready ?? false,
   }));
 };
 
