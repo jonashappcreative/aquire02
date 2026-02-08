@@ -62,14 +62,19 @@ export const TutorialGameBoard: React.FC<TutorialGameBoardProps> = ({
               return (
                 <button
                   key={tileId}
-                  onClick={() => isInHand && onTileClick?.(tileId)}
-                  disabled={!isInHand}
+                  onClick={() => {
+                    // Allow clicking on playable tiles (in hand) OR clicking directly on the board location
+                    if (isInHand || highlightedTile === tileId) {
+                      onTileClick?.(tileId);
+                    }
+                  }}
+                  disabled={!isInHand && highlightedTile !== tileId}
                   className={cn(
                     "tile flex-1 aspect-[4/3] min-h-[28px] md:min-h-[36px] text-[10px] md:text-xs font-mono",
                     isPlaced && !chainName && "tile-placed",
                     chainName && `tile-chain ${getChainClass(chainName)}`,
                     isInHand && "tile-playable cursor-pointer",
-                    isHighlighted && "ring-2 ring-primary scale-105",
+                    isHighlighted && "ring-2 ring-primary scale-105 animate-pulse",
                     !isInHand && !isPlaced && "opacity-50"
                   )}
                   title={tileId}

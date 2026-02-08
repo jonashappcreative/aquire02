@@ -77,13 +77,17 @@ Let's place one in the next step.`,
   {
     id: 5,
     title: 'Place Your First Tile',
-    content: `Let's place the **6E** tile!
+    content: `Let's place your first tile!
 
-Click the "6E" tile in your hand below, then click square 6E on the board.`,
-    spotlightSelector: '[data-tutorial="tile-6E"]',
+Find square **6E** on the board (Row 6, Column E) and click it.
+
+Your playable tiles are highlighted on the board. Just click the tile location directly!`,
+    spotlightSelector: '[data-tutorial="game-board"]',
+    spotlightShape: 'rectangle',
     isInteractive: true,
     interactiveType: 'place_tile',
     expectedAction: { type: 'place_tile', value: '6E' },
+    hideOverlay: true,
   },
 
   // Step 6: Hotel Chain Concept
@@ -106,15 +110,17 @@ Let's found your first chain!`,
   {
     id: 7,
     title: 'Found a Hotel Chain',
-    content: `Place tile **6D** next to your 6E tile.
+    content: `Now place tile **6D** next to your 6E tile.
 
 This will create your first hotel chain!
 
-Click your 6D tile, then click board square 6D.`,
-    spotlightSelector: '[data-tutorial="tile-6D"]',
+Click square **6D** on the board (right next to 6E).`,
+    spotlightSelector: '[data-tutorial="game-board"]',
+    spotlightShape: 'rectangle',
     isInteractive: true,
     interactiveType: 'place_tile',
     expectedAction: { type: 'place_tile', value: '6D' },
+    hideOverlay: true,
   },
 
   // Step 8: Chain Selection (Interactive - part of step 7 flow)
@@ -215,15 +221,15 @@ Your goal: Maximize net worth by game end!`,
   {
     id: 13,
     title: 'Growing Your Chain',
-    content: `Place a tile next to Sackson to make it grow!
+    content: `Let's make Sackson bigger! Larger chains = more valuable stocks.
 
-Larger chains = More valuable stocks!
-
-Place your **6C** tile adjacent to the Sackson chain.`,
-    spotlightSelector: '[data-tutorial="tile-6C"]',
+Click square **6C** on the board to extend Sackson.`,
+    spotlightSelector: '[data-tutorial="game-board"]',
+    spotlightShape: 'rectangle',
     isInteractive: true,
     interactiveType: 'place_tile',
     expectedAction: { type: 'place_tile', value: '6C' },
+    hideOverlay: true,
   },
 
   // Step 14: Continue Growing (Interactive)
@@ -232,11 +238,13 @@ Place your **6C** tile adjacent to the Sackson chain.`,
     title: 'Keep Growing!',
     content: `Sackson now has 3 tiles. Let's make it even bigger!
 
-Place your **5E** tile to grow Sackson to 4 tiles.`,
-    spotlightSelector: '[data-tutorial="tile-5E"]',
+Click square **5E** on the board (above 6E) to grow Sackson to 4 tiles.`,
+    spotlightSelector: '[data-tutorial="game-board"]',
+    spotlightShape: 'rectangle',
     isInteractive: true,
     interactiveType: 'place_tile',
     expectedAction: { type: 'place_tile', value: '5E' },
+    hideOverlay: true,
   },
 
   // Step 15: Stock Values & Price Tiers
@@ -299,16 +307,17 @@ Let's set one up...`,
   {
     id: 18,
     title: 'Trigger a Merger',
-    content: `Look at the board! We've placed a **Festival chain** (green) right next to your Sackson chain.
+    content: `Look at the board! **Festival** (green) is right next to **Sackson** (orange).
 
 There's a gap at **6F** between them.
 
-Place your **6F** tile to connect both chains and trigger a merger!`,
+Click square **6F** to connect both chains and trigger a merger!`,
     spotlightSelector: '[data-tutorial="game-board"]',
     spotlightShape: 'rectangle',
     isInteractive: true,
     interactiveType: 'place_tile',
     expectedAction: { type: 'place_tile', value: '6F' },
+    hideOverlay: true,
   },
 
   // Step 19: Surviving vs. Dissolved Chain
