@@ -39,3 +39,6 @@ lerna-debug.log*
 # Netlify
 .netlify/
 netlify-debug.log
+
+# Notes
+notes/
