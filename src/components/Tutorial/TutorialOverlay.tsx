@@ -55,13 +55,18 @@ export const TutorialOverlay: React.FC = () => {
     return 'bottom-right';
   };
 
+  // Check if overlay should be hidden for this step
+  const hideOverlay = stepConfig.hideOverlay === true;
+
   return (
     <>
-      <TutorialSpotlight
-        targetSelector={stepConfig.spotlightSelector}
-        shape={stepConfig.spotlightShape}
-        isVisible={isActive}
-      />
+      {!hideOverlay && (
+        <TutorialSpotlight
+          targetSelector={stepConfig.spotlightSelector}
+          shape={stepConfig.spotlightShape}
+          isVisible={isActive}
+        />
+      )}
       
       <TutorialTooltip
         step={currentStep}

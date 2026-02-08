@@ -17,6 +17,7 @@ export interface TutorialStep {
   };
   nextButtonLabel?: string;
   showBack?: boolean;
+  hideOverlay?: boolean; // Hide the dark overlay for better visibility
 }
 
 export interface TutorialGameState {
