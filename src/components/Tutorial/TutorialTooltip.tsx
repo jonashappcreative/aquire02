@@ -6,6 +6,7 @@ import { TutorialProgress } from './TutorialProgress';
 import { TutorialNavigation } from './TutorialNavigation';
 import { ExitTutorialDialog } from './ExitTutorialDialog';
 import { cn } from '@/lib/utils';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface TutorialTooltipProps {
   step: number;
@@ -51,27 +52,6 @@ export const TutorialTooltip: React.FC<TutorialTooltipProps> = ({
     onExit();
   };
 
-  // Position classes - use calc to ensure tooltip fits within viewport
-  const positionClasses = {
-    'center': 'fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 max-w-lg w-[calc(100%-2rem)]',
-    'bottom-right': 'fixed right-4 bottom-4 max-w-sm w-[calc(100%-2rem)] sm:w-auto',
-    'top-right': 'fixed right-4 top-4 max-w-sm w-[calc(100%-2rem)] sm:w-auto',
-  };
-
-  // Calculate safe max height based on position
-  const getMaxHeightStyle = () => {
-    switch (position) {
-      case 'center':
-        return { maxHeight: 'calc(100vh - 4rem)' };
-      case 'bottom-right':
-        return { maxHeight: 'calc(100vh - 2rem)' }; // 1rem top margin + 1rem bottom
-      case 'top-right':
-        return { maxHeight: 'calc(100vh - 2rem)' };
-      default:
-        return { maxHeight: 'calc(100vh - 4rem)' };
-    }
-  };
-
   // Parse content for markdown-like formatting
   const formatContent = (text: string) => {
     return text.split('\n').map((line, index) => {
@@ -97,22 +77,100 @@ export const TutorialTooltip: React.FC<TutorialTooltipProps> = ({
 
   const isLastStep = step === totalSteps;
 
+  // Render centered tooltip for intro steps
+  if (position === 'center') {
+    return (
+      <>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <motion.div
+            initial={{ opacity: 0, y: 20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.95 }}
+            transition={{ duration: 0.3, ease: 'easeOut' }}
+            className="bg-card border border-border rounded-xl shadow-lg p-5 w-full max-w-lg max-h-[85vh] flex flex-col"
+          >
+            {/* Header */}
+            <div className="flex items-start justify-between mb-3 shrink-0">
+              <div className="flex-1 pr-4">
+                <TutorialProgress currentStep={step} totalSteps={totalSteps} />
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 -mt-1 -mr-1"
+                onClick={handleExitClick}
+                aria-label="Exit tutorial"
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+
+            {/* Title */}
+            <h3 className="text-lg font-semibold mb-3 shrink-0">{title}</h3>
+
+            {/* Scrollable Content Area */}
+            <ScrollArea className="flex-1 min-h-0 pr-4">
+              <div className="text-sm text-muted-foreground space-y-1.5 mb-4">
+                {formatContent(content)}
+              </div>
+
+              {/* Interactive Hint */}
+              {isInteractive && !validationSuccess && (
+                <p className="text-xs text-primary mb-4 italic">
+                  ☝️ Complete the action above to continue
+                </p>
+              )}
+            </ScrollArea>
+
+            {/* Navigation - Always visible at bottom */}
+            <div className="shrink-0 pt-2">
+              <TutorialNavigation
+                onNext={onNext}
+                onBack={onBack}
+                canGoNext={canGoNext}
+                canGoBack={canGoBack}
+                nextLabel={nextButtonLabel}
+                isLastStep={isLastStep}
+              />
+            </div>
+          </motion.div>
+        </div>
+
+        <ExitTutorialDialog
+          open={showExitDialog}
+          onOpenChange={setShowExitDialog}
+          onConfirm={handleConfirmExit}
+        />
+      </>
+    );
+  }
+
+  // Render corner-positioned tooltip (bottom-right or top-right)
+  // Use a flex container anchored to the corner
+  const isBottom = position === 'bottom-right';
+
   return (
     <>
-      <AnimatePresence>
+      <div 
+        className={cn(
+          "fixed z-50 right-4 flex flex-col max-w-sm w-[calc(100%-2rem)] sm:w-96",
+          isBottom ? "bottom-4 top-4" : "top-4 bottom-4"
+        )}
+        style={{ pointerEvents: 'none' }}
+      >
+        {/* Spacer to push content to bottom/top */}
+        {isBottom && <div className="flex-1" />}
+        
         <motion.div
-          initial={{ opacity: 0, y: 20, scale: 0.95 }}
+          initial={{ opacity: 0, y: isBottom ? 20 : -20, scale: 0.95 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: 20, scale: 0.95 }}
+          exit={{ opacity: 0, y: isBottom ? 20 : -20, scale: 0.95 }}
           transition={{ duration: 0.3, ease: 'easeOut' }}
-          className={cn(
-            "z-50 bg-card border border-border rounded-xl shadow-lg p-5 flex flex-col overflow-hidden",
-            positionClasses[position]
-          )}
-          style={getMaxHeightStyle()}
+          className="bg-card border border-border rounded-xl shadow-lg p-5 flex flex-col max-h-[70vh] overflow-hidden"
+          style={{ pointerEvents: 'auto' }}
         >
           {/* Header */}
-          <div className="flex items-start justify-between mb-3">
+          <div className="flex items-start justify-between mb-3 shrink-0">
             <div className="flex-1 pr-4">
               <TutorialProgress currentStep={step} totalSteps={totalSteps} />
             </div>
@@ -131,38 +189,37 @@ export const TutorialTooltip: React.FC<TutorialTooltipProps> = ({
           <h3 className="text-lg font-semibold mb-3 shrink-0">{title}</h3>
 
           {/* Scrollable Content Area */}
-          <div className="overflow-y-auto flex-1 min-h-0">
-            {/* Content */}
+          <ScrollArea className="flex-1 min-h-0 pr-4">
             <div className="text-sm text-muted-foreground space-y-1.5 mb-4">
               {formatContent(content)}
             </div>
 
-          {/* Validation Feedback */}
-          <AnimatePresence>
-            {validationError && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                className="flex items-center gap-2 p-3 mb-4 rounded-lg bg-destructive/10 border border-destructive/30 text-destructive text-sm"
-              >
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                <span>{validationError}</span>
-              </motion.div>
-            )}
-            
-            {validationSuccess && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.9 }}
-                className="flex items-center gap-2 p-3 mb-4 rounded-lg bg-cash/10 border border-cash/30 text-cash text-sm"
-              >
-                <CheckCircle className="w-4 h-4 shrink-0" />
-                <span>{validationSuccess}</span>
-              </motion.div>
-            )}
-          </AnimatePresence>
+            {/* Validation Feedback */}
+            <AnimatePresence>
+              {validationError && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="flex items-center gap-2 p-3 mb-4 rounded-lg bg-destructive/10 border border-destructive/30 text-destructive text-sm"
+                >
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{validationError}</span>
+                </motion.div>
+              )}
+              
+              {validationSuccess && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  className="flex items-center gap-2 p-3 mb-4 rounded-lg bg-cash/10 border border-cash/30 text-cash text-sm"
+                >
+                  <CheckCircle className="w-4 h-4 shrink-0" />
+                  <span>{validationSuccess}</span>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* Interactive Hint */}
             {isInteractive && !validationSuccess && (
@@ -170,21 +227,24 @@ export const TutorialTooltip: React.FC<TutorialTooltipProps> = ({
                 ☝️ Complete the action above to continue
               </p>
             )}
-          </div>
+          </ScrollArea>
 
           {/* Navigation - Always visible at bottom */}
-          <div className="shrink-0">
-          <TutorialNavigation
-            onNext={onNext}
-            onBack={onBack}
-            canGoNext={canGoNext}
-            canGoBack={canGoBack}
-            nextLabel={nextButtonLabel}
-            isLastStep={isLastStep}
-          />
+          <div className="shrink-0 pt-2">
+            <TutorialNavigation
+              onNext={onNext}
+              onBack={onBack}
+              canGoNext={canGoNext}
+              canGoBack={canGoBack}
+              nextLabel={nextButtonLabel}
+              isLastStep={isLastStep}
+            />
           </div>
         </motion.div>
-      </AnimatePresence>
+        
+        {/* Spacer for top-right positioning */}
+        {!isBottom && <div className="flex-1" />}
+      </div>
 
       <ExitTutorialDialog
         open={showExitDialog}
