@@ -157,7 +157,6 @@ export const GameContainer = ({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/50 backdrop-blur-sm">
           <ChainFounder
             availableChains={getAvailableChainsForFoundation(gameState)}
-            gameState={gameState}
             onSelectChain={onFoundChain}
           />
         </div>

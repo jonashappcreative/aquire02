@@ -1,22 +1,28 @@
-import { ChainName, CHAINS, GameState, TileId } from '@/types/game';
+import { useState } from 'react';
+import { ChainName, CHAINS } from '@/types/game';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { Building2 } from 'lucide-react';
+import { Building2, Check } from 'lucide-react';
 
 interface ChainFounderProps {
   availableChains: ChainName[];
-  gameState: GameState;
   onSelectChain: (chain: ChainName) => void;
 }
 
-export const ChainFounder = ({ availableChains, gameState, onSelectChain }: ChainFounderProps) => {
+export const ChainFounder = ({ availableChains, onSelectChain }: ChainFounderProps) => {
+  const [selectedChain, setSelectedChain] = useState<ChainName | null>(null);
+
   // Sort chains by tier for better UX
   const sortedChains = [...availableChains].sort((a, b) => {
     const tierOrder = { budget: 0, midrange: 1, premium: 2 };
     return tierOrder[CHAINS[a].tier] - tierOrder[CHAINS[b].tier];
   });
 
-  const placedTile = gameState.lastPlacedTile;
+  const handleConfirm = () => {
+    if (selectedChain) {
+      onSelectChain(selectedChain);
+    }
+  };
 
   return (
     <div className="bg-card rounded-xl p-6 shadow-lg border border-primary/50 animate-slide-up">
@@ -32,23 +38,16 @@ export const ChainFounder = ({ availableChains, gameState, onSelectChain }: Chai
         </div>
       </div>
 
-      {/* Tile visual - matching TileConfirmationModal style */}
-      {placedTile && (
-        <div className="flex items-center justify-center py-4 mb-4">
-          <div className="w-20 h-16 rounded-lg bg-primary/20 border-2 border-primary flex items-center justify-center font-mono text-2xl font-bold text-primary animate-pulse-subtle">
-            {placedTile}
-          </div>
-        </div>
-      )}
-
-      <div className="grid gap-2">
-        {sortedChains.map(chain => {
+      <div className="grid grid-cols-2 gap-2">
+        {sortedChains.map((chain, index) => {
           const info = CHAINS[chain];
           const tierLabel = {
             budget: 'Budget • Lower prices, higher volatility',
             midrange: 'Mid-range • Balanced risk and reward',
             premium: 'Premium • Higher prices, stable growth',
           }[info.tier];
+          const isLastOdd = sortedChains.length % 2 === 1 && index === sortedChains.length - 1;
+          const isSelected = selectedChain === chain;
 
           return (
             <Button
@@ -56,9 +55,11 @@ export const ChainFounder = ({ availableChains, gameState, onSelectChain }: Chai
               variant="outline"
               className={cn(
                 "h-auto p-4 justify-start gap-4",
-                "hover:border-primary/50 hover:bg-primary/5"
+                "hover:border-primary/50 hover:bg-primary/5 hover:text-foreground",
+                isLastOdd && "col-span-2 justify-self-center w-[calc(50%-0.25rem)]",
+                isSelected && "border-primary bg-primary/10"
               )}
-              onClick={() => onSelectChain(chain)}
+              onClick={() => setSelectedChain(chain)}
             >
               <div className={cn("w-6 h-6 rounded-full shrink-0", `chain-${chain}`)} />
               <div className="text-left">
@@ -68,6 +69,17 @@ export const ChainFounder = ({ availableChains, gameState, onSelectChain }: Chai
             </Button>
           );
         })}
+      </div>
+
+      <div className="mt-4">
+        <Button
+          onClick={handleConfirm}
+          disabled={!selectedChain}
+          className="w-full"
+        >
+          <Check className="w-4 h-4 mr-2" />
+          Confirm
+        </Button>
       </div>
     </div>
   );
