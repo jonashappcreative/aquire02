@@ -312,6 +312,44 @@ export const OnlineLobby = ({
             <CardTitle>Create a Room</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            {/* Active Game Reconnection Banner */}
+            {activeGameInfo && (
+              <div className="p-3 rounded-lg border border-primary/50 bg-primary/5 mb-2">
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
+                    <RefreshCw className="h-4 w-4 text-primary" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold text-sm">Active Game Found</h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Room <span className="font-mono font-medium">{activeGameInfo.roomCode}</span>
+                    </p>
+                    <div className="flex gap-2 mt-2">
+                      <Button
+                        size="sm"
+                        onClick={onRejoinGame}
+                        disabled={isLoading}
+                      >
+                        {isLoading ? (
+                          <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
+                        ) : (
+                          <RefreshCw className="h-3 w-3 mr-1.5" />
+                        )}
+                        Rejoin
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={onDismissActiveGame}
+                        disabled={isLoading}
+                      >
+                        Dismiss
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
             <div className="space-y-2">
               <label className="text-sm font-medium">Your Name</label>
               <Input
@@ -378,6 +416,44 @@ export const OnlineLobby = ({
           <CardTitle>Join a Room</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Active Game Reconnection Banner */}
+          {activeGameInfo && (
+            <div className="p-3 rounded-lg border border-primary/50 bg-primary/5 mb-2">
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
+                  <RefreshCw className="h-4 w-4 text-primary" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-semibold text-sm">Active Game Found</h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Room <span className="font-mono font-medium">{activeGameInfo.roomCode}</span>
+                  </p>
+                  <div className="flex gap-2 mt-2">
+                    <Button
+                      size="sm"
+                      onClick={onRejoinGame}
+                      disabled={isLoading}
+                    >
+                      {isLoading ? (
+                        <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
+                      ) : (
+                        <RefreshCw className="h-3 w-3 mr-1.5" />
+                      )}
+                      Rejoin
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={onDismissActiveGame}
+                      disabled={isLoading}
+                    >
+                      Dismiss
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
           <div className="space-y-2">
             <label className="text-sm font-medium">Your Name</label>
             <Input
