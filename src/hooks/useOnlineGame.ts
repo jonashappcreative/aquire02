@@ -27,6 +27,7 @@ import {
   checkActiveGame,
   sendHeartbeat,
   markDisconnected,
+  clearActiveGameFromStorage,
 } from '@/utils/multiplayerService';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
@@ -157,6 +158,10 @@ export const useOnlineGame = () => {
       },
       (status) => {
         setRoomStatus(status as 'waiting' | 'playing' | 'finished');
+        // Clear localStorage when game finishes
+        if (status === 'finished') {
+          clearActiveGameFromStorage();
+        }
       }
     );
 
