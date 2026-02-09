@@ -347,7 +347,7 @@ export const dbToGameState = (
     lastPlacedTile: dbState.last_placed_tile || null,
     pendingChainFoundation: dbState.pending_chain_foundation || null,
     merger: dbState.merger || null,
-    mergerAdjacentChains: null,
+    mergerAdjacentChains: dbState.merger_adjacent_chains || null,
     stocksPurchasedThisTurn: dbState.stocks_purchased_this_turn,
     gameLog: dbState.game_log || [],
     winner: dbState.winner || null,

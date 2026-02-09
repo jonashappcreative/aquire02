@@ -14,7 +14,7 @@ import { MergerStockDecision as MergerStockDecisionComponent } from './MergerSto
 import { EndGameVote } from './EndGameVote';
 import { TileConfirmationModal } from './TileConfirmationModal';
 import { UnplayableTilesModal } from './UnplayableTilesModal';
-import { getPlayerNetWorth, getAvailableChainsForFoundation, hasPlayableTiles } from '@/utils/gameLogic';
+import { getPlayerNetWorth, getAvailableChainsForFoundation, hasPlayableTiles, getAdjacentTiles } from '@/utils/gameLogic';
 import { analyzeMerger } from '@/utils/mergerLogic';
 import { Clock } from 'lucide-react';
 
@@ -79,10 +79,33 @@ export const GameContainer = ({
 
   // Get merger analysis for survivor choice
   const getMergerPotentialSurvivors = (): ChainName[] => {
-    if (gameState.phase !== 'merger_choose_survivor' || !gameState.mergerAdjacentChains) {
+    if (gameState.phase !== 'merger_choose_survivor') {
       return [];
     }
-    const analysis = analyzeMerger(gameState, gameState.lastPlacedTile!, gameState.mergerAdjacentChains);
+
+    // Try to use mergerAdjacentChains first, or derive from board state
+    let adjacentChains = gameState.mergerAdjacentChains;
+
+    if (!adjacentChains && gameState.lastPlacedTile) {
+      // Derive adjacent chains from board state
+      const adjacent = getAdjacentTiles(gameState.lastPlacedTile);
+      const chainsSet = new Set<ChainName>();
+
+      for (const adjTile of adjacent) {
+        const tile = gameState.board.get(adjTile);
+        if (tile?.chain) {
+          chainsSet.add(tile.chain);
+        }
+      }
+
+      adjacentChains = Array.from(chainsSet);
+    }
+
+    if (!adjacentChains || adjacentChains.length < 2) {
+      return [];
+    }
+
+    const analysis = analyzeMerger(gameState, gameState.lastPlacedTile!, adjacentChains);
     return analysis.potentialSurvivors;
   };
 
@@ -128,6 +151,30 @@ export const GameContainer = ({
         onDiscard={handleDiscardTile}
         onClose={() => {}}
       />
+
+      {/* Chain Founder Modal - Only show to current player */}
+      {gameState.phase === 'found_chain' && isMyTurn && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/50 backdrop-blur-sm">
+          <ChainFounder
+            availableChains={getAvailableChainsForFoundation(gameState)}
+            gameState={gameState}
+            onSelectChain={onFoundChain}
+          />
+        </div>
+      )}
+
+      {/* Merger Survivor Choice Modal - Only show to current player */}
+      {gameState.phase === 'merger_choose_survivor' && isMyTurn && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/50 backdrop-blur-sm">
+          <MergerSurvivorChoice
+            chains={getMergerPotentialSurvivors()}
+            chainSizes={Object.fromEntries(
+              Object.entries(gameState.chains).map(([k, v]) => [k, v.tiles.length])
+            ) as Record<ChainName, number>}
+            onSelectSurvivor={onChooseMergerSurvivor}
+          />
+        </div>
+      )}
 
       {/* Waiting overlay removed - now shown in sidebar notification */}
 
@@ -180,17 +227,7 @@ export const GameContainer = ({
             />
 
             {/* Action Area */}
-            <div className="grid md:grid-cols-2 gap-4">
-            {/* Player's Hand - always visible in online mode */}
-            <PlayerHand
-              tiles={myPlayer.tiles}
-              gameState={gameState}
-              isCurrentPlayer={isMyTurn}
-              canPlace={gameState.phase === 'place_tile' && isMyTurn}
-              onTileClick={handleTileSelect}
-              selectedTile={selectedTile}
-            />
-
+            <div>
               {/* Current Action */}
               <div>
                 {gameState.phase === 'place_tile' && (
@@ -202,23 +239,6 @@ export const GameContainer = ({
                       </p>
                     </div>
                   </div>
-                )}
-
-                {gameState.phase === 'found_chain' && (
-                  <ChainFounder
-                    availableChains={getAvailableChainsForFoundation(gameState)}
-                    onSelectChain={onFoundChain}
-                  />
-                )}
-
-                {gameState.phase === 'merger_choose_survivor' && (
-                  <MergerSurvivorChoice
-                    chains={getMergerPotentialSurvivors()}
-                    chainSizes={Object.fromEntries(
-                      Object.entries(gameState.chains).map(([k, v]) => [k, v.tiles.length])
-                    ) as Record<ChainName, number>}
-                    onSelectSurvivor={onChooseMergerSurvivor}
-                  />
                 )}
 
                 {gameState.phase === 'merger_pay_bonuses' && gameState.merger?.currentDefunctChain && (
@@ -287,10 +307,8 @@ export const GameContainer = ({
               </div>
             </div>
 
-            {/* Game Log - Mobile */}
-            <div className="lg:hidden">
-              <GameLog entries={gameState.gameLog} />
-            </div>
+            {/* Game Log */}
+            <GameLog entries={gameState.gameLog} />
 
             {/* Turn Status Notification - Mobile */}
             {isOnlineMode && !isMyTurn && gameState.phase !== 'game_over' && !isMyMergerTurn && (
@@ -312,23 +330,43 @@ export const GameContainer = ({
 
           {/* Right Column - Players and Log */}
           <div className="space-y-4 lg:space-y-6">
-            {/* Player Cards */}
+            {/* Your Player Card + Tiles */}
             <div className="space-y-3">
-              {gameState.players.map((player, index) => (
-                <PlayerCard
-                  key={player.id}
-                  player={player}
-                  gameState={gameState}
-                  isCurrentTurn={index === gameState.currentPlayerIndex}
-                  isYou={player.id === myPlayer.id}
-                  rank={getPlayerRank(player.id)}
-                />
-              ))}
+              <PlayerCard
+                player={myPlayer}
+                gameState={gameState}
+                isCurrentTurn={myPlayerIndex === gameState.currentPlayerIndex}
+                isYou={true}
+                rank={getPlayerRank(myPlayer.id)}
+              />
+              {/* Player's Hand - positioned below your cash like in tutorial */}
+              <PlayerHand
+                tiles={myPlayer.tiles}
+                gameState={gameState}
+                isCurrentPlayer={isMyTurn}
+                canPlace={gameState.phase === 'place_tile' && isMyTurn}
+                onTileClick={handleTileSelect}
+                selectedTile={selectedTile}
+              />
             </div>
 
-            {/* Game Log - Desktop */}
-            <div className="hidden lg:block">
-              <GameLog entries={gameState.gameLog} />
+            {/* Other Player Cards */}
+            <div className="space-y-3">
+              {gameState.players
+                .filter((player) => player.id !== myPlayer.id)
+                .map((player, index) => {
+                  const originalIndex = gameState.players.findIndex(p => p.id === player.id);
+                  return (
+                    <PlayerCard
+                      key={player.id}
+                      player={player}
+                      gameState={gameState}
+                      isCurrentTurn={originalIndex === gameState.currentPlayerIndex}
+                      isYou={false}
+                      rank={getPlayerRank(player.id)}
+                    />
+                  );
+                })}
             </div>
 
             {/* Turn Status Notification - Desktop */}
