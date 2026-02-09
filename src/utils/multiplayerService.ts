@@ -62,11 +62,58 @@ export const createRoom = async (maxPlayers: number = 4): Promise<{ roomCode: st
   return { roomCode: data.room_code, roomId: data.id, maxPlayers: data.max_players };
 };
 
-// Join an existing room
+// Check for active games the current user is participating in
+export const checkActiveGame = async (): Promise<{
+  hasActiveGame: boolean;
+  roomCode?: string;
+  roomId?: string;
+  playerIndex?: number;
+  playerName?: string;
+  roomStatus?: string;
+} | null> => {
+  const userId = await getCurrentUserId();
+  if (!userId) {
+    return null;
+  }
+
+  // Find any game_players record for this user in an active room
+  const { data: playerRecord, error } = await supabase
+    .from('game_players')
+    .select(`
+      player_index,
+      player_name,
+      room_id,
+      game_rooms!inner (
+        id,
+        room_code,
+        status
+      )
+    `)
+    .eq('user_id', userId)
+    .in('game_rooms.status', ['waiting', 'playing'])
+    .maybeSingle();
+
+  if (error || !playerRecord) {
+    return null;
+  }
+
+  const room = playerRecord.game_rooms as any;
+
+  return {
+    hasActiveGame: true,
+    roomCode: room.room_code,
+    roomId: room.id,
+    playerIndex: playerRecord.player_index,
+    playerName: playerRecord.player_name,
+    roomStatus: room.status,
+  };
+};
+
+// Join an existing room (or rejoin if already a player)
 export const joinRoom = async (
-  roomCode: string, 
+  roomCode: string,
   playerName: string
-): Promise<{ success: boolean; roomId?: string; playerIndex?: number; maxPlayers?: number; error?: string }> => {
+): Promise<{ success: boolean; roomId?: string; playerIndex?: number; maxPlayers?: number; error?: string; isRejoin?: boolean }> => {
   // Ensure we're authenticated
   const userId = await getOrCreateAuthSession();
   if (!userId) {
@@ -74,7 +121,7 @@ export const joinRoom = async (
   }
 
   const sessionId = getSessionId(); // Keep for backward compatibility
-  
+
   // Find the room
   const { data: room, error: roomError } = await supabase
     .from('game_rooms')
@@ -84,10 +131,6 @@ export const joinRoom = async (
 
   if (roomError || !room) {
     return { success: false, error: 'Room not found' };
-  }
-
-  if (room.status !== 'waiting') {
-    return { success: false, error: 'Game already started' };
   }
 
   const maxPlayers = room.max_players || 4;
@@ -100,8 +143,30 @@ export const joinRoom = async (
     .eq('user_id', userId)
     .maybeSingle();
 
+  // If user is already in the game, allow rejoin regardless of room status
   if (myPlayer) {
-    return { success: true, roomId: room.id, playerIndex: myPlayer.player_index, maxPlayers };
+    // Mark as reconnected
+    await supabase
+      .from('game_players')
+      .update({
+        is_connected: true,
+        last_seen_at: new Date().toISOString(),
+        disconnected_at: null
+      })
+      .eq('id', myPlayer.id);
+
+    return {
+      success: true,
+      roomId: room.id,
+      playerIndex: myPlayer.player_index,
+      maxPlayers,
+      isRejoin: room.status === 'playing'
+    };
+  }
+
+  // If not already in the game and game has started, reject
+  if (room.status !== 'waiting') {
+    return { success: false, error: 'Game already in progress. You can only rejoin if you were previously in this game.' };
   }
 
   // Try to join with retry logic for race conditions
@@ -416,6 +481,39 @@ export const subscribeToRoom = (
   return () => {
     supabase.removeChannel(channel);
   };
+};
+
+// Send heartbeat to indicate player is still connected
+export const sendHeartbeat = async (roomId: string): Promise<boolean> => {
+  const userId = await getCurrentUserId();
+  if (!userId) return false;
+
+  const { error } = await supabase
+    .from('game_players')
+    .update({
+      is_connected: true,
+      last_seen_at: new Date().toISOString(),
+      disconnected_at: null
+    })
+    .eq('room_id', roomId)
+    .eq('user_id', userId);
+
+  return !error;
+};
+
+// Mark player as disconnected
+export const markDisconnected = async (roomId: string): Promise<void> => {
+  const userId = await getCurrentUserId();
+  if (!userId) return;
+
+  await supabase
+    .from('game_players')
+    .update({
+      is_connected: false,
+      disconnected_at: new Date().toISOString()
+    })
+    .eq('room_id', roomId)
+    .eq('user_id', userId);
 };
 
 // Helper function
